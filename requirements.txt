@@ -8,3 +8,4 @@ langdetect
 validators
 Readability
 pandas 
+textstat
