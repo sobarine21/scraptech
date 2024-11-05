@@ -2,7 +2,7 @@ streamlit
 bs4
 import streamlit as st
 wordcloud 
-from io
+io
 matplotlib.pyplot 
 textblob 
-re
+
