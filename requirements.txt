@@ -5,3 +5,6 @@ textblob
 matplotlib
 wordcloud
 langdetect
+validators
+Readability
+pandas 
