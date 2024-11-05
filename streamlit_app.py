@@ -27,13 +27,18 @@ if st.button("Scrape Data"):
         st.write("**Page Title:**", page_title)
 
         # 2. Keyword Extraction and Tag Cloud
-        text_content = ' '.join([p.get_text() for p in soup.find_all('p')])
-        wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text_content)
-        st.write("**Keyword Tag Cloud**")
-        fig, ax = plt.subplots()
-        ax.imshow(wordcloud, interpolation='bilinear')
-        ax.axis('off')
-        st.pyplot(fig)
+        paragraphs = [p.get_text() for p in soup.find_all('p')]
+        text_content = ' '.join(paragraphs)
+        
+        if text_content.strip():  # Check if text_content is not empty
+            wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text_content)
+            st.write("**Keyword Tag Cloud**")
+            fig, ax = plt.subplots()
+            ax.imshow(wordcloud, interpolation='bilinear')
+            ax.axis('off')
+            st.pyplot(fig)
+        else:
+            st.warning("No text content found to generate a word cloud.")
 
         # 3. Sentiment Analysis
         blob = TextBlob(text_content)
