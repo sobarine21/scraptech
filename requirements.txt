@@ -1,2 +1,8 @@
 streamlit
 bs4
+import streamlit as st
+wordcloud 
+from io
+matplotlib.pyplot 
+textblob 
+re
