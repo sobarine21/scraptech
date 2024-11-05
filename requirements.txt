@@ -1,8 +1,6 @@
 streamlit
-bs4
-import streamlit as st
-wordcloud 
-io
-matplotlib.pyplot 
-textblob 
-
+requests
+beautifulsoup4
+textblob
+matplotlib
+wordcloud
