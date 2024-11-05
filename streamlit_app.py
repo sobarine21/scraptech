@@ -9,7 +9,7 @@ import random
 import time
 import pandas as pd
 import langdetect
-from readability import Readability
+import textstat  # Changed from readability to textstat
 import validators
 
 # Function to get a random user agent
@@ -152,10 +152,9 @@ if st.button("Scrape Data"):
             else:
                 st.write("**Author Information:** Not found.")
 
-            # 15. Readability Score
-            r = Readability(text_content)
-            score = r.flesch_kincaid()
-            st.write("**Readability Score:**", score.score)
+            # 15. Readability Score using textstat
+            readability_score = textstat.flesch_kincaid_grade(text_content)
+            st.write("**Readability Score (Flesch-Kincaid Grade):**", readability_score)
 
             # 16. FAQs Extraction
             faqs = []
@@ -200,7 +199,7 @@ if st.button("Scrape Data"):
                 'Image Data': image_data,
                 'Video Links': video_links,
                 'Author': author['content'] if author else 'Not found',
-                'Readability Score': score.score,
+                'Readability Score': readability_score,
                 'FAQs': faqs,
                 'Table Data': table_data,
             }
