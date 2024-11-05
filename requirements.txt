@@ -9,3 +9,4 @@ validators
 Readability
 pandas 
 textstat
+requests_html
