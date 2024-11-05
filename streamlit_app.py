@@ -5,6 +5,19 @@ from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from textblob import TextBlob
 import re
+import random
+import time
+
+# Function to get a random user agent
+def get_random_user_agent():
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
+        'Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Mobile Safari/537.36',
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
+    ]
+    return random.choice(user_agents)
 
 st.title("Advanced Web Data Scraping Tool")
 st.write("Enter a website URL to scrape and discover hidden insights.")
@@ -15,12 +28,15 @@ url = st.text_input("Website URL", "https://example.com")
 # Button to initiate scraping
 if st.button("Scrape Data"):
     try:
-        # Adding a User-Agent header to the request
+        # Adding a random User-Agent header to the request
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36'
+            'User-Agent': get_random_user_agent()
         }
         response = requests.get(url, headers=headers)
         response.raise_for_status()  # Raise an error for bad responses
+
+        # Adding a random delay to mimic human behavior
+        time.sleep(random.uniform(1, 3))
 
         # Parse the content with BeautifulSoup
         soup = BeautifulSoup(response.content, 'html.parser')
