@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
-from io import BytesIO
 import matplotlib.pyplot as plt
 from textblob import TextBlob
 import re
@@ -16,12 +15,16 @@ url = st.text_input("Website URL", "https://example.com")
 # Button to initiate scraping
 if st.button("Scrape Data"):
     try:
-        response = requests.get(url)
-        response.raise_for_status()
+        # Adding a User-Agent header to the request
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36'
+        }
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()  # Raise an error for bad responses
 
         # Parse the content with BeautifulSoup
         soup = BeautifulSoup(response.content, 'html.parser')
-        
+
         # 1. Extract and Display Page Title
         page_title = soup.title.string if soup.title else "No title found"
         st.write("**Page Title:**", page_title)
@@ -29,7 +32,7 @@ if st.button("Scrape Data"):
         # 2. Keyword Extraction and Tag Cloud
         paragraphs = [p.get_text() for p in soup.find_all('p')]
         text_content = ' '.join(paragraphs)
-        
+
         if text_content.strip():  # Check if text_content is not empty
             wordcloud = WordCloud(width=800, height=400, background_color='white').generate(text_content)
             st.write("**Keyword Tag Cloud**")
@@ -68,11 +71,7 @@ if st.button("Scrape Data"):
         else:
             st.write("No email addresses found on this page.")
 
-        # 7. Social Media Sentiment (Placeholder)
-        st.write("**Related Social Media Sentiment**")
-        st.info("Feature coming soon - Integrate with social media APIs to pull related comments.")
-
-        # 8. Interactive Page Structure Visualization
+        # 7. Interactive Page Structure Visualization
         st.write("**Page Structure (Heading Levels)**")
         headings = [soup.find_all(f'h{i}') for i in range(1, 7)]
         for i, heading_group in enumerate(headings, start=1):
@@ -81,5 +80,10 @@ if st.button("Scrape Data"):
                 for heading in heading_group:
                     st.write(f"- {heading.get_text().strip()}")
 
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            st.error("Unauthorized access. You may need to log in to view this content.")
+        else:
+            st.error(f"An HTTP error occurred: {e}")
     except requests.exceptions.RequestException as e:
-        st.error(f"An error occurred: {e}")
+        st.error(f"A network error occurred: {e}")
