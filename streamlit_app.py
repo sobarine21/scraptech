@@ -9,7 +9,7 @@ import random
 import time
 import pandas as pd
 import langdetect
-import textstat  # Changed from readability to textstat
+import textstat  # Use textstat for readability
 import validators
 
 # Function to get a random user agent
@@ -147,10 +147,8 @@ if st.button("Scrape Data"):
 
             # 14. Extract Author Information
             author = soup.find('meta', attrs={'name': 'author'})
-            if author:
-                st.write("**Author Information:**", author['content'])
-            else:
-                st.write("**Author Information:** Not found.")
+            author_info = author['content'] if author else 'Not found'
+            st.write("**Author Information:**", author_info)
 
             # 15. Readability Score using textstat
             readability_score = textstat.flesch_kincaid_grade(text_content)
@@ -185,25 +183,26 @@ if st.button("Scrape Data"):
 
             # 20. Export to CSV
             data_to_export = {
-                'Title': page_title,
-                'Meta Tags': meta_tags,
-                'Keyword Density': keyword_density,
-                'Sentiment': sentiment,
-                'Content Length': content_length,
-                'Language': detected_language,
-                'Internal Links': top_internal_links,
-                'External Links': top_external_links,
-                'Social Media Links': social_media_links,
-                'Broken Links': broken_links,
-                'JSON-LD Data': json_ld_data,
-                'Image Data': image_data,
-                'Video Links': video_links,
-                'Author': author['content'] if author else 'Not found',
-                'Readability Score': readability_score,
-                'FAQs': faqs,
-                'Table Data': table_data,
+                'Title': [page_title],
+                'Meta Tags': [meta_tags],
+                'Keyword Density': [dict(sorted(keyword_density.items(), key=lambda item: item[1], reverse=True))],
+                'Sentiment': [sentiment],
+                'Content Length': [content_length],
+                'Language': [detected_language],
+                'Internal Links': [top_internal_links],
+                'External Links': [top_external_links],
+                'Social Media Links': [social_media_links],
+                'Broken Links': [broken_links],
+                'JSON-LD Data': [json_ld_data],
+                'Image Data': [image_data],
+                'Video Links': [video_links],
+                'Author': [author_info],
+                'Readability Score': [readability_score],
+                'FAQs': [faqs],
+                'Table Data': [table_data],
             }
-            df = pd.DataFrame(data_to_export)
+            # Convert to DataFrame ensuring all lists are the same length
+            df = pd.DataFrame.from_dict(data_to_export, orient='index').transpose()
             csv_file = f"{url.split('//')[-1].replace('/', '_')}.csv"
             df.to_csv(csv_file, index=False)
             st.download_button(label="Download CSV", data=csv_file, mime='text/csv')
