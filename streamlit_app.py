@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup, Comment
 import json
 import random
+import re
 from requests_html import HTMLSession
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
@@ -226,84 +227,64 @@ def extract_meta_keywords(soup):
             meta_keywords.extend(meta_tag["content"].split(","))
     return meta_keywords
 
-# Scrape the website and extract features
+# **New Function to Extract Contact Information**
+def extract_contact_info(soup):
+    contact_info = {
+        "emails": [],
+        "phone_numbers": [],
+        "contact_forms": []
+    }
+
+    # 1. Extract email addresses using regex (mailto: links)
+    emails = set(re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', str(soup)))
+    contact_info["emails"] = list(emails)
+
+    # 2. Extract phone numbers using regex (formats like (555) 555-5555, +1-555-555-5555)
+    phone_numbers = set(re.findall(r'(\+?\(?\d{1,4}\)?[\s\-]?\d{1,3}[\s\-]?\d{3}[\s\-]?\d{4})', str(soup)))
+    contact_info["phone_numbers"] = list(phone_numbers)
+
+    # 3. Extract forms (if the form contains "contact" in the action or method)
+    for form in soup.find_all("form"):
+        action = form.get("action", "").lower()
+        if "contact" in action:
+            contact_info["contact_forms"].append(form)
+
+    return contact_info
+
+# Main Scraping Function
 def scrape_website(url):
-    headers = {"User-Agent": get_random_user_agent()}
     session = HTMLSession()
+    headers = {"User-Agent": get_random_user_agent()}
     response = session.get(url, headers=headers)
-
-    if response.status_code != 200:
-        st.warning("Could not access the webpage.")
-        return None
-
     soup = BeautifulSoup(response.content, "html.parser")
+    
     data = {}
 
-    # 1. Page Title
-    data["Page Title"] = soup.title.string if soup.title else "No title"
-
-    # 2. Meta tags
+    # Extracting data
     data["Meta Tags"] = extract_meta_tags(soup)
-
-    # 3. Main Content
     content = " ".join([p.get_text() for p in soup.find_all("p")])
-    data["Main Content"] = content[:1000] + "..."  # Displaying a snippet
-
-    # 4. Language Detection
+    data["Main Content"] = content[:1000] + "..."
     data["Detected Language"] = detect_language(content)
-
-    # 5. Internal and External Links
     internal_links, external_links = extract_links(url, soup)
     data["Internal Links"] = internal_links
     data["External Links"] = external_links
-
-    # 6. JSON-LD Structured Data
     data["JSON-LD Data"] = extract_json_ld(soup)
-
-    # 7. Forms
     data["Forms"] = extract_forms(soup)
-
-    # 8. Tracking Scripts
     data["Tracking Scripts"] = extract_scripts_and_tracking(soup)
-
-    # 9. Media (Images, Videos)
     data["Media"] = extract_media(soup)
-
-    # 10. Comments
     data["Comments"] = extract_comments(soup)
-
-    # 11. HTTP Headers and Status Code
     data["HTTP Info"] = extract_http_info(url)
-
-    # 12. Tables
     data["Tables"] = extract_tables(soup)
-
-    # 13. Headings
     data["Headings"] = extract_headings(soup)
-
-    # 14. Social Media Links
     data["Social Media Links"] = extract_social_media_links(external_links)
-
-    # 15. Audio Files
     data["Audio Files"] = extract_audio_files(soup)
-
-    # 16. Stylesheets
     data["Stylesheets"] = extract_stylesheets(soup)
-
-    # 17. iFrames
     data["iFrames"] = extract_iframes(soup)
-
-    # 18. External JavaScript
     data["External JavaScript"] = extract_external_js(soup)
-
-    # 19. HTTP Response Time
     data["HTTP Response Time"] = extract_http_response_time(url)
-
-    # 20. Broken Images
     data["Broken Images"] = check_broken_images(data.get("Media", []))
-
-    # 21. Meta Keywords
     data["Meta Keywords"] = extract_meta_keywords(soup)
+    data["Contact Info"] = extract_contact_info(soup)  # Added contact info extraction
 
     return data
 
