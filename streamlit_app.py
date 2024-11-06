@@ -3,83 +3,102 @@ import requests
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-import pandas as pd
 from textblob import TextBlob
-from requests_html import HTMLSession
-from urllib.parse import urlparse
-import random
+import pandas as pd
+from langdetect import detect, DetectorFactory, LangDetectException
+import textstat
 import validators
+import json
+import random
+from urllib.parse import urlparse, urljoin
+from requests_html import HTMLSession
+from urllib.robotparser import RobotFileParser
+import re
 
-# Generate random user agents to help bypass basic bot detection
+# Seed the language detector for consistent results
+DetectorFactory.seed = 0
+
+# Random user agents to avoid bot detection
 def get_random_user_agent():
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
-        'Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Mobile Safari/537.36',
-        'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
+        'Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Mobile Safari/537.36'
     ]
     return random.choice(user_agents)
 
-# Extract GIFs, memes, and short-form media URLs
-def extract_multimedia_links(soup):
-    media_links = []
-    for img in soup.find_all("img", src=True):
-        if "gif" in img["src"] or "meme" in img["src"]:
-            media_links.append(img["src"])
-    return media_links
+# Check URL validity
+def is_valid_url(url):
+    return validators.url(url)
 
-# Identify dynamic elements (AJAX and JS-rendered)
-def check_dynamic_content(session, url):
+# Check if scraping is allowed
+def is_scraping_allowed(url):
+    parsed_url = urlparse(url)
+    robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
+    rp = RobotFileParser()
+    rp.set_url(robots_url)
     try:
-        response = session.get(url)
-        if "ajax" in response.text or "XMLHttpRequest" in response.text:
-            return "Dynamic content detected (AJAX/JavaScript driven)"
-        else:
-            return "Static content"
+        rp.read()
+        return rp.can_fetch("*", url)
     except:
-        return "Unable to determine"
+        return False
 
-# Detect trending topics based on frequency and sentiment
-def detect_trending_topics(text):
+# Detect language
+def detect_language(text):
+    try:
+        return detect(text)
+    except LangDetectException:
+        return "Language detection failed"
+
+# Extract metadata tags
+def extract_meta_tags(soup):
+    meta_info = {}
+    for tag in soup.find_all("meta"):
+        if tag.get("name"):
+            meta_info[tag.get("name")] = tag.get("content")
+        elif tag.get("property"):
+            meta_info[tag.get("property")] = tag.get("content")
+    return meta_info
+
+# Extract all links
+def extract_links(url, soup):
+    internal_links, external_links = set(), set()
+    for link in soup.find_all("a", href=True):
+        href = urljoin(url, link["href"])
+        if url in href:
+            internal_links.add(href)
+        else:
+            external_links.add(href)
+    return list(internal_links), list(external_links)
+
+# Extract and parse JSON-LD
+def extract_json_ld(soup):
+    json_ld_data = []
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            json_ld_data.append(json.loads(script.string))
+        except json.JSONDecodeError:
+            continue
+    return json_ld_data
+
+# Detect keyword density
+def get_keyword_density(text):
     words = text.split()
-    trending_words = pd.Series(words).value_counts().head(10)
-    return trending_words[trending_words > 3].to_dict()
+    return {word: words.count(word) / len(words) * 100 for word in set(words)}
 
-# Generate word cloud based on identified trends
-def generate_trend_wordcloud(trending_topics):
-    wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(trending_topics)
+# Main content extraction
+def extract_content(soup):
+    return " ".join([p.get_text() for p in soup.find_all("p")])
+
+# Generate and return word cloud
+def generate_wordcloud(keyword_density):
+    wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(keyword_density)
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.imshow(wordcloud, interpolation="bilinear")
     ax.axis("off")
     return fig
 
-# Extract voice or podcast content if available
-def detect_audio_content(soup):
-    audio_links = []
-    for audio in soup.find_all("audio"):
-        if audio.get("src"):
-            audio_links.append(audio.get("src"))
-    return audio_links
-
-# Detect and extract CSS animations
-def extract_css_animations(soup):
-    css_links = []
-    for link in soup.find_all("link", rel="stylesheet"):
-        css_links.append(link["href"])
-    return css_links
-
-# Detect interactive elements such as forms and pop-ups
-def detect_interactive_elements(soup):
-    forms_count = len(soup.find_all("form"))
-    popups = "Yes" if any("popup" in str(tag) for tag in soup.find_all()) else "No"
-    return {"Forms": forms_count, "Pop-Ups": popups}
-
-# Fetch embedded scripts and categorize them
-def fetch_embedded_scripts(soup):
-    scripts = [script["src"] for script in soup.find_all("script") if script.get("src")]
-    return scripts
-
-# Scrape the website and extract the requested features
+# Function to scrape all possible data
 def scrape_website(url):
     headers = {"User-Agent": get_random_user_agent()}
     session = HTMLSession()
@@ -92,63 +111,71 @@ def scrape_website(url):
     soup = BeautifulSoup(response.content, "html.parser")
     data = {}
 
-    # 1. Multimedia Links (GIFs/Memes)
-    data["Multimedia Links (GIFs/Memes)"] = extract_multimedia_links(soup)
+    # Basic Data
+    data["Page Title"] = soup.title.string if soup.title else "No title"
+    data["Meta Tags"] = extract_meta_tags(soup)
+    content = extract_content(soup)
+    data["Main Content Snippet"] = content[:1000] + "..."
 
-    # 2. Content Type
-    data["Content Type"] = check_dynamic_content(session, url)
-
-    # 3. Trending Topics Detection
-    content = " ".join([p.get_text() for p in soup.find_all("p")])
-    data["Trending Topics"] = detect_trending_topics(content)
-
-    # 4. Word Cloud
-    if data["Trending Topics"]:
-        wordcloud_fig = generate_trend_wordcloud(data["Trending Topics"])
+    # Keyword Density & Word Cloud
+    data["Keyword Density"] = get_keyword_density(content)
+    if data["Keyword Density"]:
+        wordcloud_fig = generate_wordcloud(data["Keyword Density"])
         st.pyplot(wordcloud_fig)
 
-    # 5. Audio Content Detection
-    data["Audio Content Links"] = detect_audio_content(soup)
+    # Sentiment Analysis
+    sentiment = TextBlob(content).sentiment.polarity
+    data["Sentiment Score"] = sentiment
 
-    # 6. CSS Animation Detection
-    data["CSS Animations"] = extract_css_animations(soup)
+    # Language Detection
+    data["Detected Language"] = detect_language(content)
 
-    # 7. Interactive Elements Detection
-    data["Interactive Elements"] = detect_interactive_elements(soup)
+    # Links and JSON-LD data
+    internal_links, external_links = extract_links(url, soup)
+    data["Internal Links"] = internal_links
+    data["External Links"] = external_links
+    data["JSON-LD Data"] = extract_json_ld(soup)
 
-    # 8. Embedded Scripts
-    data["Embedded Scripts"] = fetch_embedded_scripts(soup)
+    # Extended Data
+    data["Readability Score"] = textstat.flesch_kincaid_grade(content)
+    data["Image Data"] = [{"src": img.get("src"), "alt": img.get("alt", "No alt text")} for img in soup.find_all("img", src=True)]
+    data["Video Links"] = [video.get("src") for video in soup.find_all("video", src=True)]
+    data["Script URLs"] = [script.get("src") for script in soup.find_all("script", src=True)]
 
-    # 9. High-Engagement Keywords
-    words = content.split()
-    keyword_density = {word: words.count(word) for word in set(words) if len(word) > 4}
-    data["High-Engagement Keywords"] = sorted(keyword_density.items(), key=lambda x: x[1], reverse=True)[:10]
+    # Detect Emails, Phones, and Social Media Links
+    data["Emails"] = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", content)
+    data["Phone Numbers"] = re.findall(r"\+?\d[\d -]{8,}\d", content)
+    data["Social Media Links"] = [link for link in external_links if any(domain in link for domain in ["facebook", "twitter", "instagram", "linkedin"])]
 
-    # 10. Article Date Detection
-    date_elements = soup.find_all("time")
-    data["Article Dates"] = [date.get_text() for date in date_elements]
+    # Accessibility and Structured Data
+    data["Accessibility (ARIA) Tags"] = [tag.get("aria-label") for tag in soup.find_all(attrs={"aria-label": True})]
+    data["Headings"] = {f"h{level}": [h.get_text() for h in soup.find_all(f"h{level}")] for level in range(1, 7)}
+    data["Tables"] = [[cell.get_text() for cell in row.find_all(["th", "td"])] for row in soup.find_all("table")]
 
-    # 11. API Data Extraction
-    api_links = [link["href"] for link in soup.find_all("link", href=True) if "api" in link["href"]]
-    data["API Data Links"] = api_links
+    # Advanced Features
+    data["Captcha Detected"] = "Yes" if "captcha" in content.lower() else "No"
+    data["HTTPS Enabled"] = urlparse(url).scheme == "https"
+    data["Page Load Speed"] = round(response.elapsed.total_seconds(), 2)
 
-    # 12. Call-to-Action Analysis
-    cta_phrases = ["buy now", "sign up", "subscribe", "learn more", "download"]
-    ctas = [phrase for phrase in cta_phrases if phrase in content.lower()]
-    data["Call-to-Action Phrases"] = ctas
+    # Ads & Downloads
+    data["Ads Detected"] = any("ads" in script["src"] for script in soup.find_all("script", src=True))
+    data["File Downloads (PDFs)"] = [link["href"] for link in soup.find_all("a", href=True) if link["href"].endswith(".pdf")]
 
     return data
 
-# Streamlit app
-st.title("Advanced Web Data Scraping and Analysis Tool")
+# Streamlit UI
+st.title("Ultimate Web Scraper and Data Extractor")
 
-url = st.text_input("Enter a URL for analysis")
+url = st.text_input("Enter a URL for extraction")
 
-if st.button("Analyze"):
-    if not validators.url(url):
+if st.button("Extract Data"):
+    if not is_valid_url(url):
         st.error("Please enter a valid URL.")
+    elif not is_scraping_allowed(url):
+        st.warning("Scraping is not allowed on this website.")
     else:
-        with st.spinner("Scraping and analyzing..."):
+        with st.spinner("Extracting..."):
             scraped_data = scrape_website(url)
             if scraped_data:
                 st.json(scraped_data)
+
