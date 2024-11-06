@@ -4,47 +4,36 @@ from bs4 import BeautifulSoup
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from textblob import TextBlob
-import re
-import random
-import time
 import pandas as pd
-import langdetect
+from langdetect import detect, DetectorFactory, LangDetectException
 import textstat
 import validators
 import json
-import hashlib
-import os
-
-# Additional Imports for enhanced functionalities
+import random
+import time
 from urllib.parse import urlparse
 from requests_html import HTMLSession
 from urllib.robotparser import RobotFileParser
+import hashlib
 
-# Function to get a random user agent
+# Seed the detector for consistent results
+DetectorFactory.seed = 0
+
+# Initialize random user-agents to bypass bot detection
 def get_random_user_agent():
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0.3 Safari/605.1.15',
         'Mozilla/5.0 (Linux; Android 10; SM-G960F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.90 Mobile Safari/537.36',
         'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
     ]
     return random.choice(user_agents)
 
-# Function to check if a URL is valid
+# Function to check if URL is valid
 def is_valid_url(url):
     return validators.url(url)
 
-# Extract all links from the page
-def extract_links(soup):
-    links = []
-    for link in soup.find_all('a', href=True):
-        href = link['href']
-        if is_valid_url(href):
-            links.append(href)
-    return links
-
-# Function to check if a website is allowed to be scraped based on robots.txt
+# Function to check if scraping is allowed based on robots.txt
 def is_scraping_allowed(url):
     parsed_url = urlparse(url)
     robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
@@ -53,173 +42,192 @@ def is_scraping_allowed(url):
     rp.read()
     return rp.can_fetch("*", url)
 
-# Function to extract meta data like OpenGraph, Twitter Card
-def extract_meta_data(soup):
-    meta_data = {}
-    for meta_tag in soup.find_all('meta'):
-        if meta_tag.get('property') == 'og:title':
-            meta_data['og_title'] = meta_tag.get('content')
-        if meta_tag.get('property') == 'og:image':
-            meta_data['og_image'] = meta_tag.get('content')
-        if meta_tag.get('name') == 'twitter:title':
-            meta_data['twitter_title'] = meta_tag.get('content')
-        if meta_tag.get('name') == 'twitter:image':
-            meta_data['twitter_image'] = meta_tag.get('content')
-    return meta_data
+# Detect language
+def detect_language(text):
+    if not text or len(text.split()) < 3:
+        return "Insufficient text for detection"
+    try:
+        return detect(text)
+    except LangDetectException:
+        return "Detection failed"
 
-# Function to extract internal links and external links
-def classify_links(url, links):
-    internal_links = []
-    external_links = []
-    for link in links:
-        if url in link:
-            internal_links.append(link)
-        else:
-            external_links.append(link)
+# Extract meta tags
+def extract_meta_tags(soup):
+    meta_info = {}
+    for tag in soup.find_all("meta"):
+        if tag.get("name"):
+            meta_info[tag.get("name")] = tag.get("content")
+        elif tag.get("property"):
+            meta_info[tag.get("property")] = tag.get("content")
+    return meta_info
+
+# Extract all links and categorize them
+def extract_links(url, soup):
+    internal_links, external_links = [], []
+    for link in soup.find_all("a", href=True):
+        if link["href"].startswith("http"):
+            if url in link["href"]:
+                internal_links.append(link["href"])
+            else:
+                external_links.append(link["href"])
     return internal_links, external_links
 
-# Function to perform sentiment analysis
-def get_sentiment(text):
-    blob = TextBlob(text)
-    return blob.sentiment.polarity
-
-# Function to perform language detection
-def detect_language(text):
-    return langdetect.detect(text)
-
-# Function to perform keyword density analysis
-def get_keyword_density(text):
-    words = text.split()
-    keyword_density = {word: words.count(word) / len(words) * 100 for word in set(words)}
-    return keyword_density
-
-# Function to perform readability analysis
-def get_readability_score(text):
-    return textstat.flesch_kincaid_grade(text)
-
-# Function to check for broken links
-def check_broken_links(links):
-    broken_links = []
-    for link in links:
-        try:
-            response = requests.head(link, timeout=5, allow_redirects=True)
-            if response.status_code != 200:
-                broken_links.append(link)
-        except Exception as e:
-            broken_links.append(link)
-    return broken_links
-
-# Function to fetch structured data (JSON-LD)
+# Extract JSON-LD structured data
 def extract_json_ld(soup):
-    json_ld = []
-    for script in soup.find_all('script', type='application/ld+json'):
+    json_ld_data = []
+    for script in soup.find_all("script", type="application/ld+json"):
         try:
-            json_ld.append(json.loads(script.string))
+            json_ld_data.append(json.loads(script.string))
         except json.JSONDecodeError:
             continue
-    return json_ld
+    return json_ld_data
 
-# Function to handle advanced image data extraction
-def extract_image_data(soup):
-    image_data = []
-    for img in soup.find_all('img', src=True):
-        image_data.append({'src': img['src'], 'alt': img.get('alt', 'No alt text')})
-    return image_data
+# Detect keywords density
+def get_keyword_density(text):
+    words = text.split()
+    return {word: words.count(word) / len(words) * 100 for word in set(words)}
 
-# Main scraping function
+# Extract main content from paragraphs
+def extract_content(soup):
+    return " ".join([p.get_text() for p in soup.find_all("p")])
+
+# Generate word cloud
+def generate_wordcloud(keyword_density):
+    wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(keyword_density)
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud, interpolation="bilinear")
+    plt.axis("off")
+    return wordcloud
+
+# Scrape the website and extract features
 def scrape_website(url):
-    try:
-        headers = {
-            'User-Agent': get_random_user_agent()
-        }
-        
-        # Check if scraping is allowed for the website
-        if not is_scraping_allowed(url):
-            st.warning("Scraping is not allowed on this site according to its robots.txt.")
-            return
-        
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        
-        # Parse the HTML content
-        soup = BeautifulSoup(response.content, 'html.parser')
+    headers = {"User-Agent": get_random_user_agent()}
+    session = HTMLSession()
+    response = session.get(url, headers=headers)
 
-        # Extract data
-        page_title = soup.title.string if soup.title else 'No title found'
-        meta_data = extract_meta_data(soup)
-        content = ' '.join([p.get_text() for p in soup.find_all('p')])
-
-        # Perform keyword density analysis
-        keyword_density = get_keyword_density(content)
-
-        # Perform sentiment analysis
-        sentiment = get_sentiment(content)
-
-        # Detect language of the content
-        language = detect_language(content)
-
-        # Perform readability analysis
-        readability_score = get_readability_score(content)
-
-        # Extract links
-        links = extract_links(soup)
-        internal_links, external_links = classify_links(url, links)
-
-        # Extract images
-        image_data = extract_image_data(soup)
-
-        # Extract JSON-LD structured data
-        json_ld_data = extract_json_ld(soup)
-
-        # Check for broken links
-        broken_links = check_broken_links(links)
-
-        # Collect all data in a dictionary
-        data = {
-            'Page Title': page_title,
-            'Meta Data': meta_data,
-            'Keyword Density': keyword_density,
-            'Sentiment': sentiment,
-            'Language': language,
-            'Readability Score': readability_score,
-            'Internal Links': internal_links,
-            'External Links': external_links,
-            'Image Data': image_data,
-            'JSON-LD Data': json_ld_data,
-            'Broken Links': broken_links
-        }
-
-        return data
-
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching URL: {e}")
+    if response.status_code != 200:
+        st.warning("Could not access the webpage.")
         return None
 
-# Streamlit UI
-st.title("Advanced Web Scraping and Data Analysis")
-url = st.text_input("Enter Website URL", "https://example.com")
+    soup = BeautifulSoup(response.content, "html.parser")
+    data = {}
 
-if st.button("Start Scraping"):
+    # 1. Page Title
+    data["Page Title"] = soup.title.string if soup.title else "No title"
+
+    # 2. Meta tags
+    data["Meta Tags"] = extract_meta_tags(soup)
+
+    # 3. Main Content
+    content = extract_content(soup)
+    data["Main Content"] = content[:1000] + "..."  # Displaying a snippet
+
+    # 4. Keyword Density
+    data["Keyword Density"] = get_keyword_density(content)
+
+    # 5. Word Cloud
+    if data["Keyword Density"]:
+        wordcloud = generate_wordcloud(data["Keyword Density"])
+        st.pyplot(wordcloud.to_array())
+
+    # 6. Sentiment Analysis
+    sentiment = TextBlob(content).sentiment.polarity
+    data["Sentiment Score"] = sentiment
+
+    # 7. Language Detection
+    data["Detected Language"] = detect_language(content)
+
+    # 8. Internal and External Links
+    internal_links, external_links = extract_links(url, soup)
+    data["Internal Links Count"] = len(internal_links)
+    data["External Links Count"] = len(external_links)
+
+    # 9. JSON-LD Structured Data
+    data["JSON-LD Data"] = extract_json_ld(soup)
+
+    # 10. Readability Score
+    data["Readability Score"] = textstat.flesch_kincaid_grade(content)
+
+    # 11. Social Media Links
+    social_links = [link for link in external_links if any(domain in link for domain in ["facebook", "twitter", "instagram", "linkedin"])]
+    data["Social Media Links"] = social_links
+
+    # 12. Image Data
+    image_data = [{"src": img.get("src"), "alt": img.get("alt", "No alt text")} for img in soup.find_all("img", src=True)]
+    data["Image Data"] = image_data
+
+    # 13. Video Links
+    data["Video Links"] = [video["src"] for video in soup.find_all("video")]
+
+    # 14. Broken Links
+    broken_links = []
+    for link in internal_links + external_links:
+        try:
+            link_response = requests.head(link, timeout=5)
+            if link_response.status_code != 200:
+                broken_links.append(link)
+        except:
+            broken_links.append(link)
+    data["Broken Links"] = broken_links
+
+    # 15. Author Information
+    author = soup.find(attrs={"name": "author"})
+    data["Author"] = author["content"] if author else "Not available"
+
+    # 16. Robots.txt Check
+    data["Scraping Allowed"] = is_scraping_allowed(url)
+
+    # 17. Headings Structure
+    headings = {}
+    for level in range(1, 7):
+        headings[f"h{level}"] = [h.get_text() for h in soup.find_all(f"h{level}")]
+    data["Headings"] = headings
+
+    # 18. Table Data
+    tables = []
+    for table in soup.find_all("table"):
+        table_data = [[cell.get_text() for cell in row.find_all(["th", "td"])] for row in table.find_all("tr")]
+        tables.append(table_data)
+    data["Tables"] = tables
+
+    # 19. Favicon
+    favicon = soup.find("link", rel="icon")
+    data["Favicon URL"] = favicon["href"] if favicon else "No favicon found"
+
+    # 20. Canonical Link
+    canonical = soup.find("link", rel="canonical")
+    data["Canonical Link"] = canonical["href"] if canonical else "No canonical link"
+
+    # 21. Most Common Words
+    data["Common Words"] = pd.Series(content.split()).value_counts().head(10).to_dict()
+
+    # 22. FAQ Schema (if present in JSON-LD)
+    data["FAQs"] = [faq for faq in data["JSON-LD Data"] if faq.get("@type") == "FAQPage"]
+
+    # 23. Open Graph and Twitter Meta Data
+    data["Open Graph and Twitter Data"] = {key: value for key, value in data["Meta Tags"].items() if "og:" in key or "twitter:" in key}
+
+    # 24. Last Modified Date (if present)
+    last_modified = response.headers.get("Last-Modified")
+    data["Last Modified"] = last_modified if last_modified else "No last modified date found"
+
+    # 25. Word Count
+    data["Word Count"] = len(content.split())
+
+    return data
+
+# Streamlit app
+st.title("Advanced Web Scraping and Analysis Tool")
+
+url = st.text_input("Enter the URL to scrape:", "https://example.com")
+
+if st.button("Scrape Website"):
     if not is_valid_url(url):
-        st.error("Please enter a valid URL")
+        st.error("Please enter a valid URL.")
+    elif not is_scraping_allowed(url):
+        st.warning("Scraping not allowed on this website.")
     else:
-        data = scrape_website(url)
-        if data:
-            st.subheader("Page Data")
-            for key, value in data.items():
-                st.write(f"**{key}:** {value}")
-            
-            # Optionally, show the content word cloud if available
-            if 'Keyword Density' in data:
-                wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(data['Keyword Density'])
-                st.image(wordcloud.to_array(), caption="Keyword Cloud", use_column_width=True)
-
-            # Optionally, show JSON-LD data
-            if 'JSON-LD Data' in data:
-                st.json(data['JSON-LD Data'])
-
-            # Allow CSV export
-            df = pd.DataFrame([data])
-            csv_file = f"{url.split('//')[-1].replace('/', '_')}.csv"
-            df.to_csv(csv_file, index=False)
-            st.download_button(label="Download Data as CSV", data=csv_file, mime="text/csv")
+        with st.spinner("Scraping and analyzing..."):
+            scraped_data = scrape_website(url)
+            if scraped_data:
+                st.json(scraped_data)
