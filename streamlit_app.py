@@ -138,6 +138,94 @@ def extract_http_info(url):
     except requests.RequestException as e:
         return {"error": str(e)}
 
+# Extract tables
+def extract_tables(soup):
+    tables = []
+    for table in soup.find_all("table"):
+        table_data = [[cell.get_text() for cell in row.find_all(["th", "td"])] for row in table.find_all("tr")]
+        tables.append(table_data)
+    return tables
+
+# Extract headings
+def extract_headings(soup):
+    headings = {}
+    for level in range(1, 7):
+        headings[f"h{level}"] = [h.get_text() for h in soup.find_all(f"h{level}")]
+    return headings
+
+# Extract links to social media
+def extract_social_media_links(external_links):
+    social_links = []
+    social_media_domains = ["facebook", "twitter", "instagram", "linkedin", "youtube"]
+    for link in external_links:
+        if any(domain in link for domain in social_media_domains):
+            social_links.append(link)
+    return social_links
+
+# Extract audio files
+def extract_audio_files(soup):
+    audio_files = []
+    for audio in soup.find_all("audio"):
+        src = audio.get("src")
+        if src:
+            audio_files.append(src)
+    return audio_files
+
+# Extract stylesheets
+def extract_stylesheets(soup):
+    stylesheets = []
+    for link in soup.find_all("link", rel="stylesheet"):
+        href = link.get("href")
+        if href:
+            stylesheets.append(href)
+    return stylesheets
+
+# Extract iFrames
+def extract_iframes(soup):
+    iframes = []
+    for iframe in soup.find_all("iframe"):
+        src = iframe.get("src")
+        if src:
+            iframes.append(src)
+    return iframes
+
+# Extract external JavaScript files
+def extract_external_js(soup):
+    external_js = []
+    for script in soup.find_all("script", src=True):
+        external_js.append(script.get("src"))
+    return external_js
+
+# Extract HTTP response time
+def extract_http_response_time(url):
+    try:
+        response = requests.get(url)
+        return response.elapsed.total_seconds()
+    except requests.RequestException as e:
+        return {"error": str(e)}
+
+# Check for broken images
+def check_broken_images(media):
+    broken_images = []
+    for media_item in media:
+        if media_item.get("src"):
+            try:
+                response = requests.head(media_item["src"], timeout=5)
+                if response.status_code != 200:
+                    broken_images.append(media_item["src"])
+            except:
+                broken_images.append(media_item["src"])
+    return broken_images
+
+# Extract meta keywords
+def extract_meta_keywords(soup):
+    meta_keywords = []
+    meta_tags = soup.find_all("meta", {"name": "keywords"})
+    for meta_tag in meta_tags:
+        if meta_tag.get("content"):
+            meta_keywords.extend(meta_tag["content"].split(","))
+    return meta_keywords
+
 # Scrape the website and extract features
 def scrape_website(url):
     headers = {"User-Agent": get_random_user_agent()}
@@ -186,6 +274,36 @@ def scrape_website(url):
 
     # 11. HTTP Headers and Status Code
     data["HTTP Info"] = extract_http_info(url)
+
+    # 12. Tables
+    data["Tables"] = extract_tables(soup)
+
+    # 13. Headings
+    data["Headings"] = extract_headings(soup)
+
+    # 14. Social Media Links
+    data["Social Media Links"] = extract_social_media_links(external_links)
+
+    # 15. Audio Files
+    data["Audio Files"] = extract_audio_files(soup)
+
+    # 16. Stylesheets
+    data["Stylesheets"] = extract_stylesheets(soup)
+
+    # 17. iFrames
+    data["iFrames"] = extract_iframes(soup)
+
+    # 18. External JavaScript
+    data["External JavaScript"] = extract_external_js(soup)
+
+    # 19. HTTP Response Time
+    data["HTTP Response Time"] = extract_http_response_time(url)
+
+    # 20. Broken Images
+    data["Broken Images"] = check_broken_images(data.get("Media", []))
+
+    # 21. Meta Keywords
+    data["Meta Keywords"] = extract_meta_keywords(soup)
 
     return data
 
