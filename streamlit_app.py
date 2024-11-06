@@ -3,22 +3,14 @@ import requests
 from bs4 import BeautifulSoup
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-from textblob import TextBlob
 import pandas as pd
-from langdetect import detect, DetectorFactory, LangDetectException
-import textstat
-import validators
-import json
-import random
-import time
-from urllib.parse import urlparse
+from textblob import TextBlob
 from requests_html import HTMLSession
-from urllib.robotparser import RobotFileParser
+from urllib.parse import urlparse
+import random
+import validators
 
-# Seed the language detector for consistent results
-DetectorFactory.seed = 0
-
-# Initialize random user-agents to bypass bot detection
+# Generate random user agents to help bypass basic bot detection
 def get_random_user_agent():
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
@@ -28,80 +20,66 @@ def get_random_user_agent():
     ]
     return random.choice(user_agents)
 
-# Function to check if URL is valid
-def is_valid_url(url):
-    return validators.url(url)
+# Extract GIFs, memes, and short-form media URLs
+def extract_multimedia_links(soup):
+    media_links = []
+    for img in soup.find_all("img", src=True):
+        if "gif" in img["src"] or "meme" in img["src"]:
+            media_links.append(img["src"])
+    return media_links
 
-# Function to check if scraping is allowed based on robots.txt
-def is_scraping_allowed(url):
-    parsed_url = urlparse(url)
-    robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
-    rp = RobotFileParser()
-    rp.set_url(robots_url)
+# Identify dynamic elements (AJAX and JS-rendered)
+def check_dynamic_content(session, url):
     try:
-        rp.read()
-        return rp.can_fetch("*", url)
+        response = session.get(url)
+        if "ajax" in response.text or "XMLHttpRequest" in response.text:
+            return "Dynamic content detected (AJAX/JavaScript driven)"
+        else:
+            return "Static content"
     except:
-        return False
+        return "Unable to determine"
 
-# Detect language
-def detect_language(text):
-    if not text or len(text.split()) < 3:
-        return "Insufficient text for detection"
-    try:
-        return detect(text)
-    except LangDetectException:
-        return "Detection failed"
-
-# Extract meta tags
-def extract_meta_tags(soup):
-    meta_info = {}
-    for tag in soup.find_all("meta"):
-        if tag.get("name"):
-            meta_info[tag.get("name")] = tag.get("content")
-        elif tag.get("property"):
-            meta_info[tag.get("property")] = tag.get("content")
-    return meta_info
-
-# Extract all links and categorize them
-def extract_links(url, soup):
-    internal_links, external_links = [], []
-    for link in soup.find_all("a", href=True):
-        if link["href"].startswith("http"):
-            if url in link["href"]:
-                internal_links.append(link["href"])
-            else:
-                external_links.append(link["href"])
-    return internal_links, external_links
-
-# Extract JSON-LD structured data
-def extract_json_ld(soup):
-    json_ld_data = []
-    for script in soup.find_all("script", type="application/ld+json"):
-        try:
-            json_ld_data.append(json.loads(script.string))
-        except json.JSONDecodeError:
-            continue
-    return json_ld_data
-
-# Detect keywords density
-def get_keyword_density(text):
+# Detect trending topics based on frequency and sentiment
+def detect_trending_topics(text):
     words = text.split()
-    return {word: words.count(word) / len(words) * 100 for word in set(words)}
+    trending_words = pd.Series(words).value_counts().head(10)
+    return trending_words[trending_words > 3].to_dict()
 
-# Extract main content from paragraphs
-def extract_content(soup):
-    return " ".join([p.get_text() for p in soup.find_all("p")])
-
-# Generate word cloud and return the figure to display in Streamlit
-def generate_wordcloud(keyword_density):
-    wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(keyword_density)
+# Generate word cloud based on identified trends
+def generate_trend_wordcloud(trending_topics):
+    wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(trending_topics)
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.imshow(wordcloud, interpolation="bilinear")
     ax.axis("off")
     return fig
 
-# Scrape the website and extract features
+# Extract voice or podcast content if available
+def detect_audio_content(soup):
+    audio_links = []
+    for audio in soup.find_all("audio"):
+        if audio.get("src"):
+            audio_links.append(audio.get("src"))
+    return audio_links
+
+# Detect and extract CSS animations
+def extract_css_animations(soup):
+    css_links = []
+    for link in soup.find_all("link", rel="stylesheet"):
+        css_links.append(link["href"])
+    return css_links
+
+# Detect interactive elements such as forms and pop-ups
+def detect_interactive_elements(soup):
+    forms_count = len(soup.find_all("form"))
+    popups = "Yes" if any("popup" in str(tag) for tag in soup.find_all()) else "No"
+    return {"Forms": forms_count, "Pop-Ups": popups}
+
+# Fetch embedded scripts and categorize them
+def fetch_embedded_scripts(soup):
+    scripts = [script["src"] for script in soup.find_all("script") if script.get("src")]
+    return scripts
+
+# Scrape the website and extract the requested features
 def scrape_website(url):
     headers = {"User-Agent": get_random_user_agent()}
     session = HTMLSession()
@@ -114,120 +92,61 @@ def scrape_website(url):
     soup = BeautifulSoup(response.content, "html.parser")
     data = {}
 
-    # 1. Page Title
-    data["Page Title"] = soup.title.string if soup.title else "No title"
+    # 1. Multimedia Links (GIFs/Memes)
+    data["Multimedia Links (GIFs/Memes)"] = extract_multimedia_links(soup)
 
-    # 2. Meta tags
-    data["Meta Tags"] = extract_meta_tags(soup)
+    # 2. Content Type
+    data["Content Type"] = check_dynamic_content(session, url)
 
-    # 3. Main Content
-    content = extract_content(soup)
-    data["Main Content"] = content[:1000] + "..."  # Displaying a snippet
+    # 3. Trending Topics Detection
+    content = " ".join([p.get_text() for p in soup.find_all("p")])
+    data["Trending Topics"] = detect_trending_topics(content)
 
-    # 4. Keyword Density
-    data["Keyword Density"] = get_keyword_density(content)
-
-    # 5. Word Cloud
-    if data["Keyword Density"]:
-        wordcloud_fig = generate_wordcloud(data["Keyword Density"])
+    # 4. Word Cloud
+    if data["Trending Topics"]:
+        wordcloud_fig = generate_trend_wordcloud(data["Trending Topics"])
         st.pyplot(wordcloud_fig)
 
-    # 6. Sentiment Analysis
-    sentiment = TextBlob(content).sentiment.polarity
-    data["Sentiment Score"] = sentiment
+    # 5. Audio Content Detection
+    data["Audio Content Links"] = detect_audio_content(soup)
 
-    # 7. Language Detection
-    data["Detected Language"] = detect_language(content)
+    # 6. CSS Animation Detection
+    data["CSS Animations"] = extract_css_animations(soup)
 
-    # 8. Internal and External Links
-    internal_links, external_links = extract_links(url, soup)
-    data["Internal Links Count"] = len(internal_links)
-    data["External Links Count"] = len(external_links)
+    # 7. Interactive Elements Detection
+    data["Interactive Elements"] = detect_interactive_elements(soup)
 
-    # 9. JSON-LD Structured Data
-    data["JSON-LD Data"] = extract_json_ld(soup)
+    # 8. Embedded Scripts
+    data["Embedded Scripts"] = fetch_embedded_scripts(soup)
 
-    # 10. Readability Score
-    data["Readability Score"] = textstat.flesch_kincaid_grade(content)
+    # 9. High-Engagement Keywords
+    words = content.split()
+    keyword_density = {word: words.count(word) for word in set(words) if len(word) > 4}
+    data["High-Engagement Keywords"] = sorted(keyword_density.items(), key=lambda x: x[1], reverse=True)[:10]
 
-    # 11. Social Media Links
-    social_links = [link for link in external_links if any(domain in link for domain in ["facebook", "twitter", "instagram", "linkedin"])]
-    data["Social Media Links"] = social_links
+    # 10. Article Date Detection
+    date_elements = soup.find_all("time")
+    data["Article Dates"] = [date.get_text() for date in date_elements]
 
-    # 12. Image Data
-    image_data = [{"src": img.get("src"), "alt": img.get("alt", "No alt text")} for img in soup.find_all("img", src=True)]
-    data["Image Data"] = image_data
+    # 11. API Data Extraction
+    api_links = [link["href"] for link in soup.find_all("link", href=True) if "api" in link["href"]]
+    data["API Data Links"] = api_links
 
-    # 13. Video Links
-    data["Video Links"] = [video["src"] for video in soup.find_all("video")]
-
-    # 14. Broken Links
-    broken_links = []
-    for link in internal_links + external_links:
-        try:
-            link_response = requests.head(link, timeout=5)
-            if link_response.status_code != 200:
-                broken_links.append(link)
-        except:
-            broken_links.append(link)
-    data["Broken Links"] = broken_links
-
-    # 15. Author Information
-    author = soup.find(attrs={"name": "author"})
-    data["Author"] = author["content"] if author else "Not available"
-
-    # 16. Robots.txt Check
-    data["Scraping Allowed"] = is_scraping_allowed(url)
-
-    # 17. Headings Structure
-    headings = {}
-    for level in range(1, 7):
-        headings[f"h{level}"] = [h.get_text() for h in soup.find_all(f"h{level}")]
-    data["Headings"] = headings
-
-    # 18. Table Data
-    tables = []
-    for table in soup.find_all("table"):
-        table_data = [[cell.get_text() for cell in row.find_all(["th", "td"])] for row in table.find_all("tr")]
-        tables.append(table_data)
-    data["Tables"] = tables
-
-    # 19. Favicon
-    favicon = soup.find("link", rel="icon")
-    data["Favicon URL"] = favicon["href"] if favicon else "No favicon found"
-
-    # 20. Canonical Link
-    canonical = soup.find("link", rel="canonical")
-    data["Canonical Link"] = canonical["href"] if canonical else "No canonical link"
-
-    # 21. Most Common Words
-    data["Common Words"] = pd.Series(content.split()).value_counts().head(10).to_dict()
-
-    # 22. FAQ Schema (if present in JSON-LD)
-    data["FAQs"] = [faq for faq in data["JSON-LD Data"] if faq.get("@type") == "FAQPage"]
-
-    # 23. Open Graph and Twitter Meta Data
-    data["Open Graph and Twitter Data"] = {key: value for key, value in data["Meta Tags"].items() if "og:" in key or "twitter:" in key}
-
-    # 24. Last Modified Date (if present)
-    last_modified = response.headers.get("Last-Modified")
-    data["Last Modified"] = last_modified if last_modified else "No last modified date found"
-
-    # 25. Word Count
-    data["Word Count"] = len(content.split())
+    # 12. Call-to-Action Analysis
+    cta_phrases = ["buy now", "sign up", "subscribe", "learn more", "download"]
+    ctas = [phrase for phrase in cta_phrases if phrase in content.lower()]
+    data["Call-to-Action Phrases"] = ctas
 
     return data
 
 # Streamlit app
-st.title("Advanced Web Scraping and Analysis Tool")
+st.title("Advanced Web Data Scraping and Analysis Tool")
 
 url = st.text_input("Enter a URL for analysis")
 
 if st.button("Analyze"):
-    if not is_valid_url(url):
+    if not validators.url(url):
         st.error("Please enter a valid URL.")
-    elif not is_scraping_allowed(url):
-        st.warning("Scraping not allowed on this website.")
     else:
         with st.spinner("Scraping and analyzing..."):
             scraped_data = scrape_website(url)
