@@ -14,9 +14,8 @@ import time
 from urllib.parse import urlparse
 from requests_html import HTMLSession
 from urllib.robotparser import RobotFileParser
-import hashlib
 
-# Seed the detector for consistent results
+# Seed the language detector for consistent results
 DetectorFactory.seed = 0
 
 # Initialize random user-agents to bypass bot detection
@@ -39,8 +38,11 @@ def is_scraping_allowed(url):
     robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
     rp = RobotFileParser()
     rp.set_url(robots_url)
-    rp.read()
-    return rp.can_fetch("*", url)
+    try:
+        rp.read()
+        return rp.can_fetch("*", url)
+    except:
+        return False
 
 # Detect language
 def detect_language(text):
@@ -91,13 +93,13 @@ def get_keyword_density(text):
 def extract_content(soup):
     return " ".join([p.get_text() for p in soup.find_all("p")])
 
-# Generate word cloud
+# Generate word cloud and return the figure to display in Streamlit
 def generate_wordcloud(keyword_density):
     wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(keyword_density)
-    plt.figure(figsize=(10, 5))
-    plt.imshow(wordcloud, interpolation="bilinear")
-    plt.axis("off")
-    return wordcloud
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.imshow(wordcloud, interpolation="bilinear")
+    ax.axis("off")
+    return fig
 
 # Scrape the website and extract features
 def scrape_website(url):
@@ -127,8 +129,8 @@ def scrape_website(url):
 
     # 5. Word Cloud
     if data["Keyword Density"]:
-        wordcloud = generate_wordcloud(data["Keyword Density"])
-        st.pyplot(wordcloud.to_array())
+        wordcloud_fig = generate_wordcloud(data["Keyword Density"])
+        st.pyplot(wordcloud_fig)
 
     # 6. Sentiment Analysis
     sentiment = TextBlob(content).sentiment.polarity
@@ -219,9 +221,9 @@ def scrape_website(url):
 # Streamlit app
 st.title("Advanced Web Scraping and Analysis Tool")
 
-url = st.text_input("Enter the URL to scrape:", "https://example.com")
+url = st.text_input("Enter a URL for analysis")
 
-if st.button("Scrape Website"):
+if st.button("Analyze"):
     if not is_valid_url(url):
         st.error("Please enter a valid URL.")
     elif not is_scraping_allowed(url):
