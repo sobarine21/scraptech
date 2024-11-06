@@ -1,24 +1,18 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-from textblob import TextBlob
 import pandas as pd
-from langdetect import detect, DetectorFactory, LangDetectException
-import textstat
+from textblob import TextBlob
 import validators
 import json
 import random
+import re
 from urllib.parse import urlparse, urljoin
 from requests_html import HTMLSession
 from urllib.robotparser import RobotFileParser
-import re
+import time
 
-# Seed the language detector for consistent results
-DetectorFactory.seed = 0
-
-# Random user agents to avoid bot detection
+# Helper functions
 def get_random_user_agent():
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
@@ -27,11 +21,11 @@ def get_random_user_agent():
     ]
     return random.choice(user_agents)
 
-# Check URL validity
+# URL Validation
 def is_valid_url(url):
     return validators.url(url)
 
-# Check if scraping is allowed
+# Scraping Allowance
 def is_scraping_allowed(url):
     parsed_url = urlparse(url)
     robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
@@ -43,14 +37,14 @@ def is_scraping_allowed(url):
     except:
         return False
 
-# Detect language
+# Language Detection
 def detect_language(text):
     try:
         return detect(text)
     except LangDetectException:
         return "Language detection failed"
 
-# Extract metadata tags
+# Metadata Extraction
 def extract_meta_tags(soup):
     meta_info = {}
     for tag in soup.find_all("meta"):
@@ -60,7 +54,7 @@ def extract_meta_tags(soup):
             meta_info[tag.get("property")] = tag.get("content")
     return meta_info
 
-# Extract all links
+# Extracting Links (Internal and External)
 def extract_links(url, soup):
     internal_links, external_links = set(), set()
     for link in soup.find_all("a", href=True):
@@ -71,7 +65,7 @@ def extract_links(url, soup):
             external_links.add(href)
     return list(internal_links), list(external_links)
 
-# Extract and parse JSON-LD
+# Extract JSON-LD Data
 def extract_json_ld(soup):
     json_ld_data = []
     for script in soup.find_all("script", type="application/ld+json"):
@@ -81,24 +75,69 @@ def extract_json_ld(soup):
             continue
     return json_ld_data
 
-# Detect keyword density
-def get_keyword_density(text):
-    words = text.split()
-    return {word: words.count(word) / len(words) * 100 for word in set(words)}
+# Extracting Media (Images, Videos, Audio)
+def extract_media(soup, url):
+    images = [{"src": urljoin(url, img.get("src")), "alt": img.get("alt", "No alt text")} for img in soup.find_all("img", src=True)]
+    videos = [{"src": urljoin(url, video.get("src"))} for video in soup.find_all("video", src=True)]
+    audios = [{"src": urljoin(url, audio.get("src"))} for audio in soup.find_all("audio", src=True)]
+    return images, videos, audios
 
-# Main content extraction
-def extract_content(soup):
-    return " ".join([p.get_text() for p in soup.find_all("p")])
+# Extract Form Inputs (Text, Select, Checkbox)
+def extract_forms(soup):
+    forms = []
+    for form in soup.find_all("form"):
+        form_data = {
+            "action": form.get("action"),
+            "method": form.get("method"),
+            "inputs": []
+        }
+        for input_tag in form.find_all("input"):
+            form_data["inputs"].append({
+                "name": input_tag.get("name"),
+                "type": input_tag.get("type"),
+                "value": input_tag.get("value")
+            })
+        for select_tag in form.find_all("select"):
+            form_data["inputs"].append({
+                "name": select_tag.get("name"),
+                "options": [option.get("value") for option in select_tag.find_all("option")]
+            })
+        forms.append(form_data)
+    return forms
 
-# Generate and return word cloud
-def generate_wordcloud(keyword_density):
-    wordcloud = WordCloud(width=800, height=400).generate_from_frequencies(keyword_density)
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.imshow(wordcloud, interpolation="bilinear")
-    ax.axis("off")
-    return fig
+# Extract HTTP Headers and Status Code
+def extract_http_headers(url):
+    response = requests.get(url)
+    headers = dict(response.headers)
+    return headers, response.status_code
 
-# Function to scrape all possible data
+# Extracting Comments
+def extract_comments(soup):
+    comments = [comment.string for comment in soup.find_all(string=lambda text: isinstance(text, Comment))]
+    return comments
+
+# Extract Tracking Scripts
+def extract_tracking_scripts(soup):
+    tracking_scripts = []
+    for script in soup.find_all("script", src=True):
+        src = script["src"]
+        if "google-analytics" in src or "facebook" in src or "analytics" in src:
+            tracking_scripts.append(src)
+    return tracking_scripts
+
+# Extract Redirect Information
+def extract_redirect_chain(url):
+    session = HTMLSession()
+    response = session.get(url, allow_redirects=True)
+    return response.history
+
+# Extract Favicons and Open Graph Tags
+def extract_favicon_and_og(soup):
+    favicon = soup.find("link", rel="icon")
+    og_tags = {tag.get("property"): tag.get("content") for tag in soup.find_all("meta") if "og:" in tag.get("property", "")}
+    return favicon, og_tags
+
+# Scrape All Data
 def scrape_website(url):
     headers = {"User-Agent": get_random_user_agent()}
     session = HTMLSession()
@@ -111,71 +150,61 @@ def scrape_website(url):
     soup = BeautifulSoup(response.content, "html.parser")
     data = {}
 
-    # Basic Data
+    # Basic Data Extraction
     data["Page Title"] = soup.title.string if soup.title else "No title"
     data["Meta Tags"] = extract_meta_tags(soup)
-    content = extract_content(soup)
+    content = " ".join([p.get_text() for p in soup.find_all("p")])
     data["Main Content Snippet"] = content[:1000] + "..."
 
-    # Keyword Density & Word Cloud
-    data["Keyword Density"] = get_keyword_density(content)
-    if data["Keyword Density"]:
-        wordcloud_fig = generate_wordcloud(data["Keyword Density"])
-        st.pyplot(wordcloud_fig)
-
-    # Sentiment Analysis
+    # Sentiment Analysis and Language Detection
     sentiment = TextBlob(content).sentiment.polarity
     data["Sentiment Score"] = sentiment
-
-    # Language Detection
     data["Detected Language"] = detect_language(content)
 
-    # Links and JSON-LD data
+    # Extract Links
     internal_links, external_links = extract_links(url, soup)
     data["Internal Links"] = internal_links
     data["External Links"] = external_links
     data["JSON-LD Data"] = extract_json_ld(soup)
 
-    # Extended Data
-    data["Readability Score"] = textstat.flesch_kincaid_grade(content)
-    data["Image Data"] = [{"src": img.get("src"), "alt": img.get("alt", "No alt text")} for img in soup.find_all("img", src=True)]
-    data["Video Links"] = [video.get("src") for video in soup.find_all("video", src=True)]
-    data["Script URLs"] = [script.get("src") for script in soup.find_all("script", src=True)]
+    # Extract Media
+    data["Images"], data["Videos"], data["Audios"] = extract_media(soup, url)
 
-    # Detect Emails, Phones, and Social Media Links
-    data["Emails"] = re.findall(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}", content)
-    data["Phone Numbers"] = re.findall(r"\+?\d[\d -]{8,}\d", content)
-    data["Social Media Links"] = [link for link in external_links if any(domain in link for domain in ["facebook", "twitter", "instagram", "linkedin"])]
+    # Forms & Inputs
+    data["Forms"] = extract_forms(soup)
 
-    # Accessibility and Structured Data
-    data["Accessibility (ARIA) Tags"] = [tag.get("aria-label") for tag in soup.find_all(attrs={"aria-label": True})]
-    data["Headings"] = {f"h{level}": [h.get_text() for h in soup.find_all(f"h{level}")] for level in range(1, 7)}
-    data["Tables"] = [[cell.get_text() for cell in row.find_all(["th", "td"])] for row in soup.find_all("table")]
+    # Extract Headers & Status Codes
+    headers, status_code = extract_http_headers(url)
+    data["HTTP Headers"] = headers
+    data["Status Code"] = status_code
 
-    # Advanced Features
-    data["Captcha Detected"] = "Yes" if "captcha" in content.lower() else "No"
-    data["HTTPS Enabled"] = urlparse(url).scheme == "https"
-    data["Page Load Speed"] = round(response.elapsed.total_seconds(), 2)
+    # Comments
+    data["Comments"] = extract_comments(soup)
 
-    # Ads & Downloads
-    data["Ads Detected"] = any("ads" in script["src"] for script in soup.find_all("script", src=True))
-    data["File Downloads (PDFs)"] = [link["href"] for link in soup.find_all("a", href=True) if link["href"].endswith(".pdf")]
+    # Tracking Scripts
+    data["Tracking Scripts"] = extract_tracking_scripts(soup)
+
+    # Redirect Chain
+    data["Redirect Chain"] = extract_redirect_chain(url)
+
+    # Favicons & Open Graph Data
+    favicon, og_tags = extract_favicon_and_og(soup)
+    data["Favicon"] = favicon["href"] if favicon else "No favicon"
+    data["Open Graph Tags"] = og_tags
 
     return data
 
-# Streamlit UI
-st.title("Ultimate Web Scraper and Data Extractor")
+# Streamlit Interface
+st.title("Comprehensive Web Scraping Tool")
+url = st.text_input("Enter a URL for analysis")
 
-url = st.text_input("Enter a URL for extraction")
-
-if st.button("Extract Data"):
+if st.button("Analyze"):
     if not is_valid_url(url):
         st.error("Please enter a valid URL.")
     elif not is_scraping_allowed(url):
         st.warning("Scraping is not allowed on this website.")
     else:
-        with st.spinner("Extracting..."):
+        with st.spinner("Scraping and analyzing..."):
             scraped_data = scrape_website(url)
             if scraped_data:
                 st.json(scraped_data)
-
