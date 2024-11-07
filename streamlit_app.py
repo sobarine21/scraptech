@@ -227,7 +227,7 @@ def extract_meta_keywords(soup):
             meta_keywords.extend(meta_tag["content"].split(","))
     return meta_keywords
 
-# **New Function to Extract Contact Information**
+# New Function to Extract Contact Information
 def extract_contact_info(soup):
     contact_info = {
         "emails": [],
@@ -257,48 +257,41 @@ def scrape_website(url):
     headers = {"User-Agent": get_random_user_agent()}
     response = session.get(url, headers=headers)
     soup = BeautifulSoup(response.content, "html.parser")
-    
-    data = {}
 
-    # Extracting data
-    data["Meta Tags"] = extract_meta_tags(soup)
-    content = " ".join([p.get_text() for p in soup.find_all("p")])
-    data["Main Content"] = content[:1000] + "..."
-    data["Detected Language"] = detect_language(content)
-    internal_links, external_links = extract_links(url, soup)
-    data["Internal Links"] = internal_links
-    data["External Links"] = external_links
-    data["JSON-LD Data"] = extract_json_ld(soup)
-    data["Forms"] = extract_forms(soup)
-    data["Tracking Scripts"] = extract_scripts_and_tracking(soup)
-    data["Media"] = extract_media(soup)
-    data["Comments"] = extract_comments(soup)
-    data["HTTP Info"] = extract_http_info(url)
-    data["Tables"] = extract_tables(soup)
-    data["Headings"] = extract_headings(soup)
-    data["Social Media Links"] = extract_social_media_links(external_links)
-    data["Audio Files"] = extract_audio_files(soup)
-    data["Stylesheets"] = extract_stylesheets(soup)
-    data["iFrames"] = extract_iframes(soup)
-    data["External JavaScript"] = extract_external_js(soup)
-    data["HTTP Response Time"] = extract_http_response_time(url)
-    data["Broken Images"] = check_broken_images(data.get("Media", []))
-    data["Meta Keywords"] = extract_meta_keywords(soup)
-    data["Contact Info"] = extract_contact_info(soup)  # Added contact info extraction
-
+    data = {
+        "language": detect_language(soup.get_text()),
+        "meta_tags": extract_meta_tags(soup),
+        "links": extract_links(url, soup),
+        "json_ld": extract_json_ld(soup),
+        "forms": extract_forms(soup),
+        "scripts_and_tracking": extract_scripts_and_tracking(soup),
+        "media": extract_media(soup),
+        "comments": extract_comments(soup),
+        "http_info": extract_http_info(url),
+        "tables": extract_tables(soup),
+        "headings": extract_headings(soup),
+        "social_media_links": extract_social_media_links(data["links"][1]),
+        "audio_files": extract_audio_files(soup),
+        "stylesheets": extract_stylesheets(soup),
+        "iframes": extract_iframes(soup),
+        "external_js": extract_external_js(soup),
+        "response_time": extract_http_response_time(url),
+        "broken_images": check_broken_images(data["media"]),
+        "meta_keywords": extract_meta_keywords(soup),
+        "contact_info": extract_contact_info(soup)
+    }
     return data
 
-# Streamlit app
-st.title("Comprehensive Web Scraping Tool")
-url = st.text_input("Enter a URL for analysis")
+# Streamlit App Interface
+st.title("Web Data Extraction Tool")
+url = st.text_input("Enter a Website URL to Scrape", "")
 
-if st.button("Analyze"):
-    if not is_valid_url(url):
-        st.error("Please enter a valid URL.")
-    elif not is_scraping_allowed(url):
-        st.warning("Scraping is not allowed on this website.")
+if st.button("Scrape Website"):
+    if is_valid_url(url):
+        if is_scraping_allowed(url):
+            data = scrape_website(url)
+            st.json(data) # Display scraped data as JSON
+        else:
+            st.warning("Scraping is not allowed for this website (robots.txt restrictions).")
     else:
-        with st.spinner("Scraping and analyzing..."):
-            scraped_data = scrape_website(url)
-            if scraped_data:
-                st.json(scraped_data)
+        st.error("Invalid URL. Please enter a valid website address.")
