@@ -137,7 +137,7 @@ def extract_http_info(url):
             "headers": dict(response.headers)
         }
     except requests.RequestException as e:
-        return {"error": str(e)}
+        return {"error": f"Failed to fetch HTTP info: {e}"}
 
 # Extract tables
 def extract_tables(soup):
@@ -203,7 +203,7 @@ def extract_http_response_time(url):
         response = requests.get(url)
         return response.elapsed.total_seconds()
     except requests.RequestException as e:
-        return {"error": str(e)}
+        return {"error": f"Failed to get response time: {e}"}
 
 # Check for broken images
 def check_broken_images(media):
