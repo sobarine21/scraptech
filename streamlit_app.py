@@ -137,7 +137,7 @@ def extract_http_info(url):
             "headers": dict(response.headers)
         }
     except requests.RequestException as e:
-        return {"error": f"Failed to fetch HTTP info: {e}"}
+        return {"error": str(e)}
 
 # Extract tables
 def extract_tables(soup):
@@ -203,7 +203,7 @@ def extract_http_response_time(url):
         response = requests.get(url)
         return response.elapsed.total_seconds()
     except requests.RequestException as e:
-        return {"error": f"Failed to get response time: {e}"}
+        return {"error": str(e)}
 
 # Check for broken images
 def check_broken_images(media):
@@ -227,7 +227,7 @@ def extract_meta_keywords(soup):
             meta_keywords.extend(meta_tag["content"].split(","))
     return meta_keywords
 
-# New Function to Extract Contact Information
+# **New Function to Extract Contact Information**
 def extract_contact_info(soup):
     contact_info = {
         "emails": [],
@@ -255,122 +255,50 @@ def extract_contact_info(soup):
 def scrape_website(url):
     session = HTMLSession()
     headers = {"User-Agent": get_random_user_agent()}
-
-    # Check if the URL is valid and scraping is allowed
-    if not is_valid_url(url):
-        return {"error": "Invalid URL"}
-
-    if not is_scraping_allowed(url):
-        return {"error": "Scraping not allowed by robots.txt"}
-
-    try:
-        response = session.get(url, headers=headers)
-        if response.status_code != 200:
-            return {"error": f"Failed to fetch the page. Status code: {response.status_code}"}
-
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        # Data extraction
-        data = {
-            "meta_tags": extract_meta_tags(soup),
-            "links": extract_links(url, soup),
-            "json_ld": extract_json_ld(soup),
-            "forms": extract_forms(soup),
-            "tracking_scripts": extract_scripts_and_tracking(soup),
-            "media": extract_media(soup),
-            "comments": extract_comments(soup),
-            "http_info": extract_http_info(url),
-            "tables": extract_tables(soup),
-            "headings": extract_headings(soup),
-            "social_links": extract_social_media_links(data["links"][1]),
-            "audio_files": extract_audio_files(soup),
-            "stylesheets": extract_stylesheets(soup),
-            "iframes": extract_iframes(soup),
-            "external_js": extract_external_js(soup),
-            "response_time": extract_http_response_time(url),
-            "broken_images": check_broken_images(data["media"]),
-            "meta_keywords": extract_meta_keywords(soup),
-            "contact_info": extract_contact_info(soup)
-        }
-
-        return data
-
-    except Exception as e:
-        return {"error": str(e)}
-
-# Streamlit User Interface
-def main():
-    st.title("Website Scraping Tool")
-    st.write("Enter the URL of the website you want to scrape:")
-
-    url = st.text_input("Website URL")
+    response = session.get(url, headers=headers)
+    soup = BeautifulSoup(response.content, "html.parser")
     
-    if url:
-        data = scrape_website(url)
+    data = {}
 
-        if "error" in data:
-            st.error(data["error"])
-        else:
-            st.subheader("Meta Tags")
-            st.json(data["meta_tags"])
+    # Extracting data
+    data["Meta Tags"] = extract_meta_tags(soup)
+    content = " ".join([p.get_text() for p in soup.find_all("p")])
+    data["Main Content"] = content[:1000] + "..."
+    data["Detected Language"] = detect_language(content)
+    internal_links, external_links = extract_links(url, soup)
+    data["Internal Links"] = internal_links
+    data["External Links"] = external_links
+    data["JSON-LD Data"] = extract_json_ld(soup)
+    data["Forms"] = extract_forms(soup)
+    data["Tracking Scripts"] = extract_scripts_and_tracking(soup)
+    data["Media"] = extract_media(soup)
+    data["Comments"] = extract_comments(soup)
+    data["HTTP Info"] = extract_http_info(url)
+    data["Tables"] = extract_tables(soup)
+    data["Headings"] = extract_headings(soup)
+    data["Social Media Links"] = extract_social_media_links(external_links)
+    data["Audio Files"] = extract_audio_files(soup)
+    data["Stylesheets"] = extract_stylesheets(soup)
+    data["iFrames"] = extract_iframes(soup)
+    data["External JavaScript"] = extract_external_js(soup)
+    data["HTTP Response Time"] = extract_http_response_time(url)
+    data["Broken Images"] = check_broken_images(data.get("Media", []))
+    data["Meta Keywords"] = extract_meta_keywords(soup)
+    data["Contact Info"] = extract_contact_info(soup)  # Added contact info extraction
 
-            st.subheader("Links (Internal and External)")
-            st.write("Internal Links:")
-            st.write(data["links"][0])
-            st.write("External Links:")
-            st.write(data["links"][1])
+    return data
 
-            st.subheader("JSON-LD Data")
-            st.json(data["json_ld"])
+# Streamlit app
+st.title("Comprehensive Web Scraping Tool")
+url = st.text_input("Enter a URL for analysis")
 
-            st.subheader("Forms on the Website")
-            st.write(data["forms"])
-
-            st.subheader("Tracking Scripts")
-            st.write(data["tracking_scripts"])
-
-            st.subheader("Media Files (Images, Videos, etc.)")
-            st.write(data["media"])
-
-            st.subheader("Comments in the HTML")
-            st.write(data["comments"])
-
-            st.subheader("HTTP Response Information")
-            st.write(data["http_info"])
-
-            st.subheader("Tables")
-            st.write(data["tables"])
-
-            st.subheader("Headings")
-            st.write(data["headings"])
-
-            st.subheader("Social Media Links")
-            st.write(data["social_links"])
-
-            st.subheader("Audio Files")
-            st.write(data["audio_files"])
-
-            st.subheader("Stylesheets")
-            st.write(data["stylesheets"])
-
-            st.subheader("iFrames")
-            st.write(data["iframes"])
-
-            st.subheader("External JavaScript Files")
-            st.write(data["external_js"])
-
-            st.subheader("HTTP Response Time")
-            st.write(data["response_time"])
-
-            st.subheader("Broken Images")
-            st.write(data["broken_images"])
-
-            st.subheader("Meta Keywords")
-            st.write(data["meta_keywords"])
-
-            st.subheader("Contact Information")
-            st.write(data["contact_info"])
-
-# Run the Streamlit app
-if __name__ == "__main__":
-    main()
+if st.button("Analyze"):
+    if not is_valid_url(url):
+        st.error("Please enter a valid URL.")
+    elif not is_scraping_allowed(url):
+        st.warning("Scraping is not allowed on this website.")
+    else:
+        with st.spinner("Scraping and analyzing..."):
+            scraped_data = scrape_website(url)
+            if scraped_data:
+                st.json(scraped_data)
