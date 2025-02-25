@@ -10,10 +10,12 @@ from urllib.robotparser import RobotFileParser
 from langdetect import detect, LangDetectException
 import validators
 import pandas as pd
-from langdetect import DetectorFactory
 
+# Seed the language detector for consistent results
+from langdetect import DetectorFactory
 DetectorFactory.seed = 0
 
+# Initialize random user-agents to bypass bot detection
 def get_random_user_agent():
     user_agents = [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.82 Safari/537.36',
@@ -23,9 +25,11 @@ def get_random_user_agent():
     ]
     return random.choice(user_agents)
 
+# Function to check if URL is valid
 def is_valid_url(url):
     return validators.url(url)
 
+# Function to check if scraping is allowed based on robots.txt
 def is_scraping_allowed(url):
     parsed_url = urlparse(url)
     robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
@@ -37,6 +41,7 @@ def is_scraping_allowed(url):
     except:
         return False
 
+# Detect language
 def detect_language(text):
     if not text or len(text.split()) < 3:
         return "Insufficient text for detection"
@@ -45,6 +50,7 @@ def detect_language(text):
     except LangDetectException:
         return "Detection failed"
 
+# Extract meta tags
 def extract_meta_tags(soup):
     meta_info = {}
     for tag in soup.find_all("meta"):
@@ -54,6 +60,7 @@ def extract_meta_tags(soup):
             meta_info[tag.get("property")] = tag.get("content")
     return meta_info
 
+# Extract all links and categorize them
 def extract_links(url, soup):
     internal_links, external_links = [], []
     for link in soup.find_all("a", href=True):
@@ -64,6 +71,7 @@ def extract_links(url, soup):
                 external_links.append(link["href"])
     return internal_links, external_links
 
+# Extract JSON-LD structured data
 def extract_json_ld(soup):
     json_ld_data = []
     for script in soup.find_all("script", type="application/ld+json"):
@@ -73,6 +81,7 @@ def extract_json_ld(soup):
             continue
     return json_ld_data
 
+# Extract forms
 def extract_forms(soup):
     forms = []
     for form in soup.find_all("form"):
@@ -91,6 +100,7 @@ def extract_forms(soup):
         forms.append(form_data)
     return forms
 
+# Extract scripts and tracking tags
 def extract_scripts_and_tracking(soup):
     tracking_scripts = []
     for script in soup.find_all("script"):
@@ -100,20 +110,25 @@ def extract_scripts_and_tracking(soup):
                 tracking_scripts.append(src)
     return tracking_scripts
 
+# Extract images and media content
 def extract_media(soup):
     media_data = []
+    # Images
     images = [{"src": img.get("src"), "alt": img.get("alt", "No alt text")} for img in soup.find_all("img", src=True)]
     media_data.extend(images)
+    # Videos
     videos = [{"src": video.get("src")} for video in soup.find_all("video", src=True)]
     media_data.extend(videos)
     return media_data
 
+# Extract comments from HTML
 def extract_comments(soup):
     comments = []
     for comment in soup.find_all(string=lambda text: isinstance(text, Comment)):
         comments.append(comment)
     return comments
 
+# Extract HTTP Headers and Status Code
 def extract_http_info(url):
     try:
         response = requests.get(url)
@@ -124,6 +139,7 @@ def extract_http_info(url):
     except requests.RequestException as e:
         return {"error": str(e)}
 
+# Extract tables
 def extract_tables(soup):
     tables = []
     for table in soup.find_all("table"):
@@ -131,12 +147,14 @@ def extract_tables(soup):
         tables.append(table_data)
     return tables
 
+# Extract headings
 def extract_headings(soup):
     headings = {}
     for level in range(1, 7):
         headings[f"h{level}"] = [h.get_text() for h in soup.find_all(f"h{level}")]
     return headings
 
+# Extract links to social media
 def extract_social_media_links(external_links):
     social_links = []
     social_media_domains = ["facebook", "twitter", "instagram", "linkedin", "youtube"]
@@ -145,6 +163,7 @@ def extract_social_media_links(external_links):
             social_links.append(link)
     return social_links
 
+# Extract audio files
 def extract_audio_files(soup):
     audio_files = []
     for audio in soup.find_all("audio"):
@@ -153,6 +172,7 @@ def extract_audio_files(soup):
             audio_files.append(src)
     return audio_files
 
+# Extract stylesheets
 def extract_stylesheets(soup):
     stylesheets = []
     for link in soup.find_all("link", rel="stylesheet"):
@@ -161,6 +181,7 @@ def extract_stylesheets(soup):
             stylesheets.append(href)
     return stylesheets
 
+# Extract iFrames
 def extract_iframes(soup):
     iframes = []
     for iframe in soup.find_all("iframe"):
@@ -169,12 +190,14 @@ def extract_iframes(soup):
             iframes.append(src)
     return iframes
 
+# Extract external JavaScript files
 def extract_external_js(soup):
     external_js = []
     for script in soup.find_all("script", src=True):
         external_js.append(script.get("src"))
     return external_js
 
+# Extract HTTP response time
 def extract_http_response_time(url):
     try:
         response = requests.get(url)
@@ -182,6 +205,7 @@ def extract_http_response_time(url):
     except requests.RequestException as e:
         return {"error": str(e)}
 
+# Check for broken images
 def check_broken_images(media):
     broken_images = []
     for media_item in media:
@@ -194,6 +218,7 @@ def check_broken_images(media):
                 broken_images.append(media_item["src"])
     return broken_images
 
+# Extract meta keywords
 def extract_meta_keywords(soup):
     meta_keywords = []
     meta_tags = soup.find_all("meta", {"name": "keywords"})
@@ -202,6 +227,7 @@ def extract_meta_keywords(soup):
             meta_keywords.extend(meta_tag["content"].split(","))
     return meta_keywords
 
+# **New Function to Extract Contact Information**
 def extract_contact_info(soup):
     contact_info = {
         "emails": [],
@@ -209,12 +235,15 @@ def extract_contact_info(soup):
         "contact_forms": []
     }
 
+    # 1. Extract email addresses using regex (mailto: links)
     emails = set(re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', str(soup)))
     contact_info["emails"] = list(emails)
 
+    # 2. Extract phone numbers using regex (formats like (555) 555-5555, +1-555-555-5555)
     phone_numbers = set(re.findall(r'(\+?\(?\d{1,4}\)?[\s\-]?\d{1,3}[\s\-]?\d{3}[\s\-]?\d{4})', str(soup)))
     contact_info["phone_numbers"] = list(phone_numbers)
 
+    # 3. Extract forms (if the form contains "contact" in the action or method)
     for form in soup.find_all("form"):
         action = form.get("action", "").lower()
         if "contact" in action:
@@ -222,6 +251,7 @@ def extract_contact_info(soup):
 
     return contact_info
 
+# Main Scraping Function
 def scrape_website(url):
     session = HTMLSession()
     headers = {"User-Agent": get_random_user_agent()}
@@ -230,6 +260,7 @@ def scrape_website(url):
     
     data = {}
 
+    # Extracting data
     data["Meta Tags"] = extract_meta_tags(soup)
     content = " ".join([p.get_text() for p in soup.find_all("p")])
     data["Main Content"] = content[:1000] + "..."
@@ -253,10 +284,11 @@ def scrape_website(url):
     data["HTTP Response Time"] = extract_http_response_time(url)
     data["Broken Images"] = check_broken_images(data.get("Media", []))
     data["Meta Keywords"] = extract_meta_keywords(soup)
-    data["Contact Info"] = extract_contact_info(soup)
+    data["Contact Info"] = extract_contact_info(soup)  # Added contact info extraction
 
     return data
 
+# Streamlit app
 st.title("Comprehensive Web Scraping Tool")
 url = st.text_input("Enter a URL for analysis")
 
