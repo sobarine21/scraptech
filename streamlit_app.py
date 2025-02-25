@@ -356,14 +356,14 @@ def extract_pwa_manifest(soup):
 
 # Function to extract viewport meta tag
 def extract_viewport_meta(soup):
-    tag = soup.find("meta", name="viewport")
+    tag = soup.find("meta", attrs={"name": "viewport"})
     if tag:
         return tag.get("content")
     return None
 
 # Function to extract charset meta tag
 def extract_charset_meta(soup):
-    tag = soup.find("meta", charset=True)
+    tag = soup.find("meta", attrs={"charset": True})
     if tag:
         return tag.get("charset")
     return None
@@ -385,7 +385,7 @@ def extract_site_verification_meta(soup):
 
 # Function to extract copyright meta tag
 def extract_copyright_meta(soup):
-    tag = soup.find("meta", name="copyright")
+    tag = soup.find("meta", attrs={"name": "copyright"})
     if tag:
         return tag.get("content")
     return None
