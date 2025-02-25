@@ -251,6 +251,145 @@ def extract_contact_info(soup):
 
     return contact_info
 
+# New Functions
+
+# Function to extract Open Graph tags
+def extract_open_graph_tags(soup):
+    og_tags = {}
+    for tag in soup.find_all("meta"):
+        if tag.get("property", "").startswith("og:"):
+            og_tags[tag.get("property")] = tag.get("content")
+    return og_tags
+
+# Function to extract Twitter Card tags
+def extract_twitter_card_tags(soup):
+    twitter_tags = {}
+    for tag in soup.find_all("meta"):
+        if tag.get("name", "").startswith("twitter:"):
+            twitter_tags[tag.get("name")] = tag.get("content")
+    return twitter_tags
+
+# Function to extract canonical URL
+def extract_canonical_url(soup):
+    link = soup.find("link", rel="canonical")
+    if link:
+        return link.get("href")
+    return None
+
+# Function to extract favicon URL
+def extract_favicon_url(soup):
+    link = soup.find("link", rel="icon")
+    if link:
+        return link.get("href")
+    return None
+
+# Function to extract RSS feeds
+def extract_rss_feeds(soup):
+    feeds = []
+    for link in soup.find_all("link", type="application/rss+xml"):
+        feeds.append(link.get("href"))
+    return feeds
+
+# Function to extract Dublin Core metadata
+def extract_dublin_core_metadata(soup):
+    dc_metadata = {}
+    for tag in soup.find_all("meta"):
+        if tag.get("name", "").startswith("DC."):
+            dc_metadata[tag.get("name")] = tag.get("content")
+    return dc_metadata
+
+# Function to extract schema.org structured data
+def extract_schema_org_data(soup):
+    schema_data = []
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            schema_data.append(json.loads(script.string))
+        except json.JSONDecodeError:
+            continue
+    return schema_data
+
+# Function to extract OpenSearch description
+def extract_opensearch_description(soup):
+    link = soup.find("link", type="application/opensearchdescription+xml")
+    if link:
+        return link.get("href")
+    return None
+
+# Function to extract alternate language links
+def extract_alternate_language_links(soup):
+    alt_links = []
+    for link in soup.find_all("link", rel="alternate"):
+        if link.get("hreflang"):
+            alt_links.append({"lang": link.get("hreflang"), "url": link.get("href")})
+    return alt_links
+
+# Function to extract hreflang links
+def extract_hreflang_links(soup):
+    hreflang_links = []
+    for link in soup.find_all("link", rel="alternate", hreflang=True):
+        hreflang_links.append({"hreflang": link.get("hreflang"), "url": link.get("href")})
+    return hreflang_links
+
+# Function to extract structured data
+def extract_structured_data(soup):
+    structured_data = []
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            structured_data.append(json.loads(script.string))
+        except json.JSONDecodeError:
+            continue
+    return structured_data
+
+# Function to extract AMP links
+def extract_amp_links(soup):
+    amp_links = []
+    for link in soup.find_all("link", rel="amphtml"):
+        amp_links.append(link.get("href"))
+    return amp_links
+
+# Function to extract PWA manifest
+def extract_pwa_manifest(soup):
+    link = soup.find("link", rel="manifest")
+    if link:
+        return link.get("href")
+    return None
+
+# Function to extract viewport meta tag
+def extract_viewport_meta(soup):
+    tag = soup.find("meta", name="viewport")
+    if tag:
+        return tag.get("content")
+    return None
+
+# Function to extract charset meta tag
+def extract_charset_meta(soup):
+    tag = soup.find("meta", charset=True)
+    if tag:
+        return tag.get("charset")
+    return None
+
+# Function to extract refresh meta tag
+def extract_refresh_meta(soup):
+    tag = soup.find("meta", attrs={"http-equiv": "refresh"})
+    if tag:
+        return tag.get("content")
+    return None
+
+# Function to extract site verification meta tags
+def extract_site_verification_meta(soup):
+    verification_tags = {}
+    for tag in soup.find_all("meta"):
+        if tag.get("name", "").endswith("site-verification"):
+            verification_tags[tag.get("name")] = tag.get("content")
+    return verification_tags
+
+# Function to extract copyright meta tag
+def extract_copyright_meta(soup):
+    tag = soup.find("meta", name="copyright")
+    if tag:
+        return tag.get("content")
+    return None
+
 # Main Scraping Function
 def scrape_website(url):
     session = HTMLSession()
@@ -285,6 +424,26 @@ def scrape_website(url):
     data["Broken Images"] = check_broken_images(data.get("Media", []))
     data["Meta Keywords"] = extract_meta_keywords(soup)
     data["Contact Info"] = extract_contact_info(soup)  # Added contact info extraction
+
+    # New data extractions
+    data["Open Graph Tags"] = extract_open_graph_tags(soup)
+    data["Twitter Card Tags"] = extract_twitter_card_tags(soup)
+    data["Canonical URL"] = extract_canonical_url(soup)
+    data["Favicon URL"] = extract_favicon_url(soup)
+    data["RSS Feeds"] = extract_rss_feeds(soup)
+    data["Dublin Core Metadata"] = extract_dublin_core_metadata(soup)
+    data["Schema.org Data"] = extract_schema_org_data(soup)
+    data["OpenSearch Description"] = extract_opensearch_description(soup)
+    data["Alternate Language Links"] = extract_alternate_language_links(soup)
+    data["Hreflang Links"] = extract_hreflang_links(soup)
+    data["Structured Data"] = extract_structured_data(soup)
+    data["AMP Links"] = extract_amp_links(soup)
+    data["PWA Manifest"] = extract_pwa_manifest(soup)
+    data["Viewport Meta"] = extract_viewport_meta(soup)
+    data["Charset Meta"] = extract_charset_meta(soup)
+    data["Refresh Meta"] = extract_refresh_meta(soup)
+    data["Site Verification Meta"] = extract_site_verification_meta(soup)
+    data["Copyright Meta"] = extract_copyright_meta(soup)
 
     return data
 
