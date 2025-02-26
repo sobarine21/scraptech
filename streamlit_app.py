@@ -289,25 +289,50 @@ def scrape_website(url):
     return data
 
 # Streamlit UI
-st.set_page_config(page_title="Comprehensive Web Scraping Tool", layout="wide")
-st.title("Comprehensive Web Scraping Tool")
+st.set_page_config(page_title="Comprehensive Web Scraping Tool", layout="wide", initial_sidebar_state="expanded")
 
 st.markdown("""
-<style>
-    .stButton>button {
-        background-color: #4CAF50;
-        color: white;
-    }
-    .stTextInput>div>div>input {
-        background-color: #f9f9f9;
-        border: 1px solid #ccc;
-        padding: 8px;
-        border-radius: 4px;
-    }
-</style>
+    <style>
+        .main {
+            background-color: #f0f2f6;
+            padding: 2rem;
+            border-radius: 10px;
+        }
+        .stButton>button {
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+        }
+        .stTextInput>div>div>input {
+            background-color: #ffffff;
+            border: 1px solid #ccc;
+            padding: 0.5rem;
+            border-radius: 5px;
+        }
+        .stAlert {
+            border-radius: 5px;
+        }
+        .css-1aumxhk {
+            padding-top: 2rem;
+        }
+    </style>
 """, unsafe_allow_html=True)
 
+st.title("Comprehensive Web Scraping Tool")
+st.subheader("Analyze and extract detailed information from any web page")
+
+st.sidebar.header("User Guide")
+st.sidebar.info("""
+    1. Enter a valid URL that you want to analyze.
+    2. Click on the "Analyze" button to start scraping.
+    3. View the extracted information in a structured format.
+    4. Ensure you have permission to scrape the website.
+""")
+
 url = st.text_input("Enter a URL for analysis", placeholder="https://example.com")
+
 if st.button("Analyze"):
     if not is_valid_url(url):
         st.error("Please enter a valid URL.")
@@ -317,4 +342,5 @@ if st.button("Analyze"):
         with st.spinner("Scraping and analyzing..."):
             scraped_data = scrape_website(url)
             if scraped_data:
+                st.success("Scraping completed successfully!")
                 st.json(scraped_data)
