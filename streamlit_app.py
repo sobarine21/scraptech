@@ -294,20 +294,22 @@ st.set_page_config(page_title="Comprehensive Web Scraping Tool", layout="wide", 
 st.markdown("""
     <style>
         .main {
-            background-color: #f0f2f6;
+            background-color: #1e1e1e;
+            color: #ffffff;
             padding: 2rem;
             border-radius: 10px;
         }
         .stButton>button {
-            background-color: #4CAF50;
+            background-color: #0078d4;
             color: white;
             border-radius: 5px;
             padding: 0.5rem 1rem;
             font-size: 1rem;
         }
         .stTextInput>div>div>input {
-            background-color: #ffffff;
-            border: 1px solid #ccc;
+            background-color: #333333;
+            color: #ffffff;
+            border: 1px solid #555555;
             padding: 0.5rem;
             border-radius: 5px;
         }
@@ -316,6 +318,9 @@ st.markdown("""
         }
         .css-1aumxhk {
             padding-top: 2rem;
+        }
+        .reportview-container .main footer {
+            visibility: hidden;
         }
     </style>
 """, unsafe_allow_html=True)
