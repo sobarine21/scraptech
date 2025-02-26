@@ -306,7 +306,6 @@ def convert_to_excel(data):
     df = pd.json_normalize(data)
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Data')
-        writer.save()
     return output.getvalue()
 
 # Streamlit UI
