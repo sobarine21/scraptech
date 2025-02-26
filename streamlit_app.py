@@ -10,6 +10,7 @@ from urllib.robotparser import RobotFileParser
 from langdetect import detect, LangDetectException
 import validators
 import pandas as pd
+import io
 
 # Seed the language detector for consistent results
 from langdetect import DetectorFactory
@@ -288,6 +289,26 @@ def scrape_website(url):
 
     return data
 
+# Convert data to JSON
+def convert_to_json(data):
+    return json.dumps(data, indent=4)
+
+# Convert data to CSV
+def convert_to_csv(data):
+    output = io.StringIO()
+    df = pd.json_normalize(data)
+    df.to_csv(output, index=False)
+    return output.getvalue()
+
+# Convert data to Excel
+def convert_to_excel(data):
+    output = io.BytesIO()
+    df = pd.json_normalize(data)
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Data')
+        writer.save()
+    return output.getvalue()
+
 # Streamlit UI
 st.set_page_config(page_title="Comprehensive Web Scraping Tool", layout="wide", initial_sidebar_state="expanded")
 
@@ -349,3 +370,23 @@ if st.button("Analyze"):
             if scraped_data:
                 st.success("Scraping completed successfully!")
                 st.json(scraped_data)
+                
+                # Download options
+                st.download_button(
+                    label="Download JSON",
+                    data=convert_to_json(scraped_data),
+                    file_name='scraped_data.json',
+                    mime='application/json'
+                )
+                st.download_button(
+                    label="Download CSV",
+                    data=convert_to_csv(scraped_data),
+                    file_name='scraped_data.csv',
+                    mime='text/csv'
+                )
+                st.download_button(
+                    label="Download Excel",
+                    data=convert_to_excel(scraped_data),
+                    file_name='scraped_data.xlsx',
+                    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                )
