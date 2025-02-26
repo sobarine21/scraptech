@@ -401,3 +401,12 @@ if st.button("Analyze"):
                     file_name='scraped_data.xlsx',
                     mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
                 )
+
+# Self-hosting and Source Code link
+    st.markdown(
+        """
+        ### Self-Hosting
+        If you want to self-host this application or download the source code, please visit:  
+        👉 [Download Source Code](https://dhruvbansal8.gumroad.com/l/hhwbm)
+        """
+    )
