@@ -11,3 +11,4 @@ pandas
 textstat
 lxml_html_clean
 requests_html
+xlsxwriter
