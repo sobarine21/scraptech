@@ -227,7 +227,7 @@ def extract_meta_keywords(soup):
             meta_keywords.extend(meta_tag["content"].split(","))
     return meta_keywords
 
-# **New Function to Extract Contact Information**
+# Extract contact information
 def extract_contact_info(soup):
     contact_info = {
         "emails": [],
@@ -235,15 +235,15 @@ def extract_contact_info(soup):
         "contact_forms": []
     }
 
-    # 1. Extract email addresses using regex (mailto: links)
+    # Extract email addresses using regex (mailto: links)
     emails = set(re.findall(r'mailto:([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', str(soup)))
     contact_info["emails"] = list(emails)
 
-    # 2. Extract phone numbers using regex (formats like (555) 555-5555, +1-555-555-5555)
+    # Extract phone numbers using regex (formats like (555) 555-5555, +1-555-555-5555)
     phone_numbers = set(re.findall(r'(\+?\(?\d{1,4}\)?[\s\-]?\d{1,3}[\s\-]?\d{3}[\s\-]?\d{4})', str(soup)))
     contact_info["phone_numbers"] = list(phone_numbers)
 
-    # 3. Extract forms (if the form contains "contact" in the action or method)
+    # Extract forms (if the form contains "contact" in the action or method)
     for form in soup.find_all("form"):
         action = form.get("action", "").lower()
         if "contact" in action:
@@ -288,10 +288,26 @@ def scrape_website(url):
 
     return data
 
-# Streamlit app
+# Streamlit UI
+st.set_page_config(page_title="Comprehensive Web Scraping Tool", layout="wide")
 st.title("Comprehensive Web Scraping Tool")
-url = st.text_input("Enter a URL for analysis")
 
+st.markdown("""
+<style>
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+    }
+    .stTextInput>div>div>input {
+        background-color: #f9f9f9;
+        border: 1px solid #ccc;
+        padding: 8px;
+        border-radius: 4px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+url = st.text_input("Enter a URL for analysis", placeholder="https://example.com")
 if st.button("Analyze"):
     if not is_valid_url(url):
         st.error("Please enter a valid URL.")
